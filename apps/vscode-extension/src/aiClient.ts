@@ -58,8 +58,8 @@ export const PROVIDER_GUIDES: Record<AiProviderType, ProviderGuide> = {
     isFree: true,
     freeTierNote: "Free forever tier available. 15 requests per minute, 1M tokens/min. No credit card required.",
     portalUrl: "https://aistudio.google.com/app/apikey",
-    defaultModel: "gemini-1.5-flash",
-    suggestedModels: ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-flash-8b", "gemini-1.5-pro"],
+    defaultModel: "gemini-2.0-flash",
+    suggestedModels: ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash-8b"],
     requiresApiKey: true,
     steps: [
       "Open Google AI Studio at https://aistudio.google.com/app/apikey",
@@ -260,7 +260,7 @@ export class AiClient {
     // Cross-provider model sanitize: auto-correct if settings contain a model from a different provider
     if (provider === "gemini") {
       if (!model || !model.toLowerCase().includes("gemini")) {
-        model = "gemini-1.5-flash";
+        model = "gemini-2.0-flash";
       }
     } else if (provider === "groq") {
       if (!model || model.toLowerCase().includes("gemini")) {
@@ -355,24 +355,20 @@ export class AiClient {
       if (provider === "gemini") {
         if (!apiKey) return { ok: false, message: "Gemini API key is required. Click 'Get Free API Key' to generate one." };
         const cleanKey = apiKey.trim().replace(/^["']|["']$/g, "");
-        let modelToTry = targetModel && targetModel.toLowerCase().includes("gemini") ? targetModel : "gemini-1.5-flash";
-        const candidateModels = [modelToTry, "gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-flash-8b", "gemini-1.5-pro"];
-        const uniqueModels = [...new Set(candidateModels)];
+        const modelToTry = targetModel && targetModel.toLowerCase().includes("gemini") ? targetModel : "gemini-2.0-flash";
+        const candidateModels = [...new Set([modelToTry, "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"])];
 
         let lastErr = "";
-        for (const m of uniqueModels) {
+        for (const m of candidateModels) {
           try {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${encodeURIComponent(cleanKey)}`;
             const res = await fetchWithTimeout(url, {
               method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "x-goog-api-key": cleanKey
-              },
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 contents: [{ role: "user", parts: [{ text: "ping" }] }]
               })
-            }, 8000);
+            }, 10000);
 
             if (res.ok) {
               return {
@@ -384,16 +380,13 @@ export class AiClient {
             }
             const errBody = await res.text();
             let errMsg = errBody;
-            try {
-              const p = JSON.parse(errBody);
-              errMsg = p.error?.message || errBody;
-            } catch {}
-            lastErr = `${m} (${res.status}): ${errMsg.slice(0, 150)}`;
+            try { errMsg = JSON.parse(errBody)?.error?.message || errBody; } catch {}
+            lastErr = `${m} (${res.status}): ${errMsg.slice(0, 200)}`;
           } catch (e: any) {
             lastErr = e instanceof Error ? e.message : String(e);
           }
         }
-        return { ok: false, message: `Gemini authentication failed: ${lastErr}` };
+        return { ok: false, message: `Gemini error: ${lastErr}` };
       }
 
       // 3. Ollama (Local)
@@ -924,6 +917,19 @@ export function ${cleanFnName}(...args: any[]) {
   }
 
   private static async callFreeCloudAi(systemPrompt: string, userPrompt: string): Promise<string> {
+    // Hard 12-second ceiling for the entire free-AI attempt.
+    // If all network calls stall (common in extension host), this races them out
+    // so the caller can fall through to the offline template immediately.
+    const hardTimeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Free AI timed out")), 12000)
+    );
+    return Promise.race([this._tryFreeCloudAi(systemPrompt, userPrompt), hardTimeout]);
+  }
+
+  private static async _tryFreeCloudAi(systemPrompt: string, userPrompt: string): Promise<string> {
+    const errors: string[] = [];
+
+    // Attempt 1: Pollinations POST (primary) — 7s per attempt
     try {
       const res = await fetchWithTimeout("https://text.pollinations.ai/", {
         method: "POST",
@@ -934,28 +940,38 @@ export function ${cleanFnName}(...args: any[]) {
             { role: "user", content: userPrompt }
           ],
           model: "openai",
-          code: true
+          seed: 42
         })
-      }, 15000);
-
+      }, 7000);
       if (res.ok) {
         const text = await res.text();
-        if (text && text.trim()) return text;
+        if (text && text.trim().length > 10) return text;
+      } else {
+        errors.push(`Pollinations POST ${res.status}`);
       }
-    } catch (e) {
-      console.warn("[CodePet] Free Cloud AI POST error:", e);
+    } catch (e: any) {
+      errors.push(`Pollinations POST: ${e?.message || e}`);
     }
 
-    // Secondary attempt with prompt in URL
-    const query = encodeURIComponent(`${systemPrompt}\n\nTask: ${userPrompt}`);
-    const resGet = await fetchWithTimeout(`https://text.pollinations.ai/${query}?model=openai`, {
-      method: "GET"
-    }, 15000);
+    // Attempt 2: Pollinations GET — 7s
+    try {
+      const combined = `${systemPrompt}\n\n${userPrompt}`.slice(0, 600);
+      const resGet = await fetchWithTimeout(
+        `https://text.pollinations.ai/${encodeURIComponent(combined)}?model=openai&seed=42`,
+        { method: "GET" },
+        7000
+      );
+      if (resGet.ok) {
+        const text = await resGet.text();
+        if (text && text.trim().length > 10) return text;
+      } else {
+        errors.push(`Pollinations GET ${resGet.status}`);
+      }
+    } catch (e: any) {
+      errors.push(`Pollinations GET: ${e?.message || e}`);
+    }
 
-    if (!resGet.ok) throw new Error(`Free AI request failed with status ${resGet.status}`);
-    const textGet = await resGet.text();
-    if (!textGet || !textGet.trim()) throw new Error("Free AI returned empty content");
-    return textGet;
+    throw new Error(`Free AI unavailable (${errors.join(" | ")}). Please configure an API key in Settings.`);
   }
 
   static async generateCode(params: {
@@ -1327,53 +1343,36 @@ Output ONLY the code inside a markdown code fence like \`\`\`${detectedLang} ...
     // 2. Google Gemini
     if (provider === "gemini") {
       if (!cleanKey) throw new Error("Gemini API Key is missing. Click settings to configure.");
-      let modelToUse = model && model.toLowerCase().includes("gemini") ? model : "gemini-1.5-flash";
-      const candidateModels = [modelToUse, "gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-flash-8b", "gemini-1.5-pro"];
-      const uniqueModels = [...new Set(candidateModels)];
+      const modelToUse = model && model.toLowerCase().includes("gemini") ? model : "gemini-2.0-flash";
+      const candidateModels = [...new Set([modelToUse, "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite"])];
 
       let lastError = "";
-      for (const m of uniqueModels) {
+      for (const m of candidateModels) {
         try {
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${encodeURIComponent(cleanKey)}`;
           const res = await fetchWithTimeout(url, {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-goog-api-key": cleanKey
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              contents: [
-                {
-                  role: "user",
-                  parts: [
-                    { text: `${systemPrompt}\n\nTask:\n${userPrompt}` }
-                  ]
-                }
-              ],
-              generationConfig: {
-                temperature: 0.2,
-                maxOutputTokens: 2048
-              }
+              contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\nTask:\n${userPrompt}` }] }],
+              generationConfig: { temperature: 0.2, maxOutputTokens: 2048 }
             })
-          }, 15000);
+          }, 20000);
 
           if (res.ok) {
             const body = (await res.json()) as any;
             const text = body.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (text) {
-              return text;
-            }
-            if (body.candidates?.[0]?.finishReason) {
-              lastError = `Gemini (${m}) finished with: ${body.candidates[0].finishReason}`;
+            if (text) return text;
+            const reason = body.candidates?.[0]?.finishReason;
+            if (reason && reason !== "STOP") {
+              lastError = `Gemini (${m}) blocked: ${reason}`;
+              continue;
             }
           } else {
             const errBody = await res.text();
             let msg = errBody;
-            try {
-              const parsed = JSON.parse(errBody);
-              msg = parsed.error?.message || errBody;
-            } catch {}
-            lastError = `Gemini (${m}) HTTP ${res.status}: ${msg}`;
+            try { msg = JSON.parse(errBody)?.error?.message || errBody; } catch {}
+            lastError = `Gemini (${m}) HTTP ${res.status}: ${msg.slice(0, 200)}`;
           }
         } catch (fetchErr: any) {
           lastError = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);

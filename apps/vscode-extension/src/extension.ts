@@ -617,12 +617,16 @@ async function handleChatPrompt(promptText: string) {
     }
   } catch {}
 
+  // 30-second hard ceiling — if everything stalls the UI still recovers
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("Request timed out after 30s. Check your internet connection or add an API key in Settings.")), 30000)
+  );
+
   try {
-    const result = await AiClient.generateCode({
-      prompt: promptText,
-      language: lang,
-      currentCode
-    });
+    const result = await Promise.race([
+      AiClient.generateCode({ prompt: promptText, language: lang, currentCode }),
+      timeoutPromise
+    ]);
 
     viewProvider?.showChatResult({
       prompt: promptText,
@@ -644,9 +648,9 @@ async function handleChatPrompt(promptText: string) {
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error("[CodePet] AI generation error:", err);
-    viewProvider?.showChatError(`AI Error (${provider}): ${errMsg}`);
-    panel?.showChatError(`AI Error (${provider}): ${errMsg}`);
-    vscode.window.showErrorMessage(`🐾 ${petName}: AI generation error (${errMsg}). Check Settings & API key.`);
+    viewProvider?.showChatError(`${errMsg}`);
+    panel?.showChatError(`${errMsg}`);
+    vscode.window.showErrorMessage(`🐾 ${petName}: ${errMsg}`);
   }
 }
 

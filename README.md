@@ -72,3 +72,32 @@ Includes 1-click links and setup guides for all top free and open providers:
 1. Open this repository in VS Code.
 2. Press **`F5`** (or go to **Run and Debug** and click **Run CodePet Extension**).
 3. A new development window will open with the latest 3D companion running.
+
+import sys
+
+def greet_pet(pet_name):
+    if pet_name == '🐾 Pewter Penguin':
+        print('Hello Pewter! Would you like me to scan your code for errors across all languages and help correct them?')
+        response = input('What is your decision?')
+        if response == '✅ Yes, scan & correct my code':
+            print('Scanning activated! Enjoy code exploration and error fixing with Pewter Present!')
+            code_scanning = True
+            for filename in os.listdir():
+                if filename.endswith('.py'):
+                    with open(filename) as f:
+                        data = f.read()
+                        # Rest of error detection/error handling code goes here
+        else:
+            reply = 'It seems you have chosen to ignore the code scanning feature, Pewter presents some basic debugging assistance. Simply hover over lines in `{}` to get debug information. Enjoy your coding session, Pewter on duty!'
+
+# Define function in codePet()
+def codePet():
+    code_scanning = False   << Initializing `code_scanning` to False
+    reply = 'Pewter scouts in standby, ready for action! Your coding adventure begins.'
+    while True:
+        print('----------------------------')
+        input = input('What is your task today? (Scan Code or Debug) ')
+        if input == 'Scan Code':
+            greet_pet('🐾 Pewter Python')
+            code_scanning = True << Enable code scanning functionality
+            for filename in os.listdir('/Users/Pewt
