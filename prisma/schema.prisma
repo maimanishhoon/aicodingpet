@@ -1,0 +1,152 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url = env("DATABASE_URL")
+}
+
+enum PetSpecies {
+  DOG
+  CAT
+  PANDA
+  FOX
+  ROBOT
+}
+enum DebugSeverity {
+  ERROR
+  WARNING
+  INFORMATION
+}
+enum DebugMode {
+  MANUAL
+  SUGGESTION
+  AUTO
+}
+
+model User {
+  id String @id @default(cuid())
+  email String @unique
+  passwordHash String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  pets Pet[]
+  sessions CodingSession[]
+  progress LearningProgress[]
+  submissions ExerciseSubmission[]
+  settings UserSettings?
+}
+model Pet {
+  id String @id @default(cuid())
+  userId String
+  name String
+  species PetSpecies
+  level Int @default(1)
+  experience Int @default(0)
+  selected Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customization PetCustomization?
+  @@index([userId])
+}
+model PetCustomization {
+  id String @id @default(cuid())
+  petId String @unique
+  color String @default("default")
+  accessory String?
+  personality String @default("FRIENDLY_MENTOR")
+  soundsEnabled Boolean @default(true)
+  voiceEnabled Boolean @default(false)
+  pet Pet @relation(fields: [petId], references: [id], onDelete: Cascade)
+}
+model CodingSession {
+  id String @id @default(cuid())
+  userId String
+  language String
+  startedAt DateTime @default(now())
+  endedAt DateTime?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  debugSessions DebugSession[]
+  @@index([userId, startedAt])
+}
+model DebugSession {
+  id String @id @default(cuid())
+  codingSessionId String
+  mode DebugMode @default(SUGGESTION)
+  createdAt DateTime @default(now())
+  codingSession CodingSession @relation(fields: [codingSessionId], references: [id], onDelete: Cascade)
+  diagnostics DebugDiagnostic[]
+  corrections CodeCorrection[]
+}
+model DebugDiagnostic {
+  id String @id @default(cuid())
+  debugSessionId String
+  severity DebugSeverity
+  category String
+  message String
+  fileName String
+  line Int
+  column Int
+  createdAt DateTime @default(now())
+  debugSession DebugSession @relation(fields: [debugSessionId], references: [id], onDelete: Cascade)
+  @@index([debugSessionId, severity])
+}
+model CodeCorrection {
+  id String @id @default(cuid())
+  debugSessionId String
+  originalSnippet String
+  correctedSnippet String
+  confidence Float
+  acceptedAt DateTime?
+  createdAt DateTime @default(now())
+  debugSession DebugSession @relation(fields: [debugSessionId], references: [id], onDelete: Cascade)
+}
+model LearningTopic {
+  id String @id @default(cuid())
+  slug String @unique
+  title String
+  exercises Exercise[]
+}
+model Exercise {
+  id String @id @default(cuid())
+  topicId String
+  title String
+  prompt String
+  topic LearningTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  submissions ExerciseSubmission[]
+}
+model ExerciseSubmission {
+  id String @id @default(cuid())
+  userId String
+  exerciseId String
+  sourceCode String?
+  passed Boolean
+  submittedAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  @@index([userId, submittedAt])
+}
+model LearningProgress {
+  id String @id @default(cuid())
+  userId String
+  topicId String
+  score Float @default(0)
+  completedAt DateTime?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([userId, topicId])
+}
+model Achievement {
+  id String @id @default(cuid())
+  key String @unique
+  title String
+  description String
+}
+model UserSettings {
+  id String @id @default(cuid())
+  userId String @unique
+  codeHistoryEnabled Boolean @default(false)
+  debugMode DebugMode @default(SUGGESTION)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

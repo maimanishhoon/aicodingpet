@@ -1,0 +1,16 @@
+{
+  "name": "codepet-ai",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "concurrently -n server,web -c blue,magenta \"npm run dev --workspace=@codepet/server\" \"npm run dev --workspace=@codepet/web\"",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "db:generate": "npm run prisma:generate --workspace=@codepet/server",
+    "db:migrate": "npm run prisma:migrate --workspace=@codepet/server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

@@ -1,0 +1,19 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: codepet
+      MYSQL_USER: codepet
+      MYSQL_PASSWORD: codepet_dev_password
+      MYSQL_ROOT_PASSWORD: root_dev_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot_dev_password"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+volumes:
+  mysql-data:

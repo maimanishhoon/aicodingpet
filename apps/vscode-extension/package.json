@@ -1,0 +1,84 @@
+{
+  "name": "codepet-ai",
+  "displayName": "CodePet AI",
+  "version": "0.1.0",
+  "private": true,
+  "publisher": "codepet-local",
+  "type": "commonjs",
+  "engines": { "vscode": "^1.95.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "codepet-companion",
+          "title": "CodePet",
+          "icon": "$(heart)"
+        }
+      ]
+    },
+    "views": {
+      "codepet-companion": [
+        {
+          "type": "webview",
+          "id": "codepet.petView",
+          "name": "Luffy Companion"
+        }
+      ],
+      "explorer": [
+        {
+          "type": "webview",
+          "id": "codepet.petViewExplorer",
+          "name": "Luffy Companion"
+        }
+      ]
+    },
+    "commands": [
+      { "command": "codepet.openCompanionBeside", "title": "CodePet: Open Luffy Companion Beside Editor" },
+      { "command": "codepet.openAssistant", "title": "CodePet: Open Companion Studio & Settings" },
+      { "command": "codepet.explainCurrentError", "title": "CodePet: Explain Current Error" },
+      { "command": "codepet.autoFixCurrentError", "title": "CodePet: Auto-Fix Current Error" },
+      { "command": "codepet.fixCurrentError", "title": "CodePet: Fix Current Error" },
+      { "command": "codepet.enterApiKey", "title": "CodePet: Configure AI API Key" },
+      { "command": "codepet.analyzeCurrentFile", "title": "CodePet: Scan Current File" },
+      { "command": "codepet.toggleAutoMode", "title": "CodePet: Toggle Auto Mode" },
+      { "command": "codepet.toggleDoNotDisturb", "title": "CodePet: Toggle Do Not Disturb" },
+      { "command": "codepet.openSettings", "title": "CodePet: Open Settings" }
+    ],
+    "configuration": {
+      "title": "CodePet AI",
+      "properties": {
+        "codepet.scanningPermission": {
+          "type": "string",
+          "enum": ["not_asked", "granted", "denied"],
+          "default": "granted",
+          "description": "Whether CodePet has permission to scan and correct your code across all languages."
+        },
+        "codepet.apiBaseUrl": { "type": "string", "default": "http://localhost:3001", "description": "CodePet API base URL." },
+        "codepet.debounceMs": { "type": "number", "default": 400, "minimum": 200, "description": "Wait time in ms before re-evaluating diagnostics." },
+        "codepet.doNotDisturb": { "type": "boolean", "default": false, "description": "Suppress CodePet error notifications." },
+        "codepet.autoPopMessages": { "type": "boolean", "default": true, "description": "Whether your pet pops up interactive notifications in VS Code when errors occur." },
+        "codepet.petSpecies": {
+          "type": "string",
+          "enum": ["bot", "cat", "dog", "dino", "fox"],
+          "default": "bot",
+          "description": "Your CodePet species (bot: Luffy Robot Companion, cat/dog/dino/fox: Dotted Matrix avatars)."
+        },
+        "codepet.petName": { "type": "string", "default": "luffy", "description": "Your CodePet name." },
+        "codepet.aiProvider": {
+          "type": "string",
+          "enum": ["groq", "gemini", "siliconflow", "deepseek", "qwen", "zhipu", "moonshot", "ollama", "openai", "backend"],
+          "default": "groq",
+          "description": "Active AI Provider (Free tier available for Groq, Gemini, SiliconFlow, DeepSeek, Qwen, Zhipu GLM-4, Ollama)."
+        },
+        "codepet.apiKey": { "type": "string", "default": "", "description": "API Key for your active AI Provider." },
+        "codepet.aiModel": { "type": "string", "default": "", "description": "Model override (or leave empty to use recommended default for the provider)." },
+        "codepet.ollamaBaseUrl": { "type": "string", "default": "http://localhost:11434", "description": "Local Ollama server base URL (100% free & offline)." }
+      }
+    }
+  },
+  "scripts": { "build": "tsc -p tsconfig.json", "watch": "tsc -watch -p tsconfig.json" },
+  "devDependencies": { "@types/node": "^22.10.5", "@types/vscode": "^1.95.0", "typescript": "^5.7.2" }
+}
